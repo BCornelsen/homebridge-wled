@@ -1,6 +1,6 @@
 {
-  "name": "homebridge-http-rgb-push",
-  "version": "0.0.0-development",
+  "name": "homebridge-WLED",
+  "version": "0.0.1",
   "description": "Homebridge plugin to control a HTTP RGB device with push notification support (fork of homebridge-better-http-rgb).",
   "license": "ISC",
   "keywords": [
@@ -11,8 +11,8 @@
     "homebridge": ">=0.2.0"
   },
   "author": {
-    "name": "Sander van Woensel",
-    "email": "sandervanwoensel@ymail.com"
+    "name": "Bastian Cornelsen",
+    "email": "dev@bastiancornelsen.de"
   },
   "contributors": [
     {
@@ -20,11 +20,14 @@
     },
     {
       "name": "Justin J. Novack"
+    },
+    {
+      "name": "Sander von Woensel"
     }
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/QuickSander/homebridge-http-rgb-push.git"
+    "url": "https://github.com/BCornelsen/homebridge-wled.git"
   },
   "preferGlobal": true,
   "dependencies": {

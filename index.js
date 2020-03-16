@@ -12,7 +12,7 @@ const MODEL = PACKAGE_JSON.name;
 const FIRMWARE_REVISION = PACKAGE_JSON.version;
 
 const IDENTIFY_BLINK_DELAY_MS = 250; // [ms]
-const DEFAULT_BRIGHTNESS_MAX = 100;
+const DEFAULT_BRIGHTNESS_MAX = 255;
 
 // -----------------------------------------------------------------------------
 // Module variables
@@ -34,7 +34,7 @@ module.exports = function(homebridge){
     api = homebridge;
     Service = homebridge.hap.Service;
     Characteristic = homebridge.hap.Characteristic;
-    homebridge.registerAccessory(MODEL, 'HttpPushRgb', HttpPushRgb);
+    homebridge.registerAccessory(MODEL, 'WLED', WLED);
 };
 
 // -----------------------------------------------------------------------------
@@ -48,68 +48,42 @@ module.exports = function(homebridge){
  * @param {function} log Logging function.
  * @param {object} config The configuration object.
  */
-function HttpPushRgb(log, config) {
+function WLED(log, config) {
 
     this.log = log;
 
     this.service                       = null;
-    this.serviceCategory               = config.service;
-    this.name                          = config.name                      || 'RGB Light';
+    this.serviceCategory               = 'Light';
+    this.name                          = config.name                      || 'WLED Light';
 
     this.http_method                   = config.http_method               || 'GET';
     this.username                      = config.username                  || '';
     this.password                      = config.password                  || '';
     this.timeout                       = config.timeout                   || 10000;
 
+    this.url                           = config.url                       || false;
+
     // Handle the basic on/off
     this.switch = { powerOn: {}, powerOff: {}, status: {} };
-    if (typeof config.switch === 'object') {
 
-        this.switch.status.bodyRegEx   = new RegExp("1");
-        // Intelligently handle if config.switch.status is an object or string.
-        if (typeof config.switch.status === 'object') {
-            this.switch.status.url         = config.switch.status.url;
+    this.switch.status.bodyRegEx   = new RegExp("\\\{\\\"on\\\":true,");
+    this.switch.status.url         = this.url + '/json/state';
+    this.switch.powerOn.set_url    = this.url + '/win&T=1';
+    this.switch.powerOff.set_url   = this.url + '/win&T=0';
 
-            // Verify type of body regular expression parameter.
-            if (typeof config.switch.status.bodyRegEx === "string") {
-               this.switch.status.bodyRegEx = new RegExp(config.switch.status.bodyRegEx);
-            }
-            else {
-               this.log("Property 'switch.status.bodyRegEx' was provided in an unsupported type. Using default one!");
-            }
-        } else {
-            this.switch.status.url         = config.switch.status;
-        }
-
-        // Intelligently handle if config.switch.powerOn is an object or string.
-        if (typeof config.switch.powerOn === 'object') {
-            this.switch.powerOn.set_url    = config.switch.powerOn.url;
-            this.switch.powerOn.body       = config.switch.powerOn.body;
-        } else {
-            this.switch.powerOn.set_url    = config.switch.powerOn;
-        }
-
-        // Intelligently handle if config.switch.powerOff is an object or string.
-        if (typeof config.switch.powerOff === 'object') {
-            this.switch.powerOff.set_url   = config.switch.powerOff.url;
-            this.switch.powerOff.body      = config.switch.powerOff.body;
-        } else {
-            this.switch.powerOff.set_url   = config.switch.powerOff;
-        }
-
-        // Register notification server.
-        api.on('didFinishLaunching', function() {
-           // Check if notificationRegistration is set and user specified notificationID.
-           // if not 'notificationRegistration' is probably not installed on the system.
-           if (api.notificationRegistration && typeof api.notificationRegistration === "function" &&
-               config.switch.notificationID) {
-               try {
-                  api.notificationRegistration(config.switch.notificationID, this.handleNotification.bind(this), config.switch.notificationPassword);
-               } catch (error) {
-                   // notificationID is already taken.
-               }
+    // Register notification server.
+    api.on('didFinishLaunching', function() {
+       // Check if notificationRegistration is set and user specified notificationID.
+       // if not 'notificationRegistration' is probably not installed on the system.
+       if (api.notificationRegistration && typeof api.notificationRegistration === "function" &&
+           config.switch.notificationID) {
+           try {
+              api.notificationRegistration(config.switch.notificationID, this.handleNotification.bind(this), config.switch.notificationPassword);
+           } catch (error) {
+               // notificationID is already taken.
            }
-        }.bind(this));
+       }
+    }.bind(this));
 
     }
 
@@ -118,64 +92,36 @@ function HttpPushRgb(log, config) {
     this.cacheUpdated = false;
 
     // Handle brightness
-    if (typeof config.brightness === 'object') {
-        this.brightness = {status: {}, set_url: {}};
-        if (typeof config.brightness.status === 'object') {
-            this.brightness.status.url = config.brightness.status.url;
-            this.brightness.status.bodyRegEx = new RegExp(config.brightness.status.bodyRegEx);
-        } else {
-            this.brightness.status.url = config.brightness.status;
-        }
-        if (typeof config.brightness.url === 'object') {
-            this.brightness.set_url.url = config.brightness.url.url || this.brightness.status.url;
-            this.brightness.set_url.body = config.brightness.url.body || '';
-        } else {
-            this.brightness.set_url.url = config.brightness.url || this.brightness.status.url;
-            this.brightness.set_url.body = '';
-        }
-        this.brightness.http_method    = config.brightness.http_method    || this.http_method;
-        this.brightness.max = config.brightness.max || DEFAULT_BRIGHTNESS_MAX;
-        this.cache.brightness = 0;
-    } else {
-        this.brightness = false;
-        this.cache.brightness = 100;
-    }
+    this.brightness = {status: {}, set_url: {}};
+    this.brightness.status.url = this.url + '/json/state';;
+    this.brightness.status.bodyRegEx = "\\\"bri\\\":([0-9]+),";
+    this.brightness.set_url.url = this.url + '/win&A=';
+    this.brightness.set_url.body = '';
+    this.brightness.http_method    = 'GET';
+    this.brightness.max = config.brightness.max || DEFAULT_BRIGHTNESS_MAX;
+    this.cache.brightness = 0;
 
     // Color handling
-    if (typeof config.color === 'object') {
-        this.color = {"set_url": {}, "get_url": {}};
-        if (typeof config.color.url === 'object') {
-            this.color.set_url.url = config.color.url.url || this.color.status;
-            this.color.set_url.body = config.color.url.body;
-        } else {
-            this.color.set_url.url = config.color.url || this.color.status;
-            this.color.set_url.body = '';
-        }
+    this.color = {"set_url": {}, "get_url": {}};
+    this.color.set_url.url = this.url + '/win&R=%r&G=%g&B=%b';
+    this.color.set_url.body = '';
 
-        if (typeof config.color.status === 'object') {
-            this.color.get_url.url = config.color.status.url;
-            this.color.get_url.bodyRegEx = config.color.status.bodyRegEx || '';
-        } else {
-            this.color.get_url.url = config.color.status;
-            this.color.get_url.bodyRegEx = '';
-        }
+    this.color.get_url.url = this.url + '/json/state';
+    this.color.get_url.bodyRegEx   = "\\\"col\\\":\\\[\\\[([0-9]+),([0-9]+),([0-9]+)\\\]";
 
-        this.color.http_method         = config.color.http_method         || this.http_method;
-        this.color.brightness          = config.color.brightness;
-        this.cache.hue = 0;
-        this.cache.saturation = 0;
-    } else {
-        this.color = false;
-    }
+    this.color.http_method         = 'GET';
+    this.color.brightness          = true;
+    this.cache.hue = 0;
+    this.cache.saturation = 0;
 
     this.has = { brightness: this.brightness || (typeof this.color === 'object' && this.color.brightness) };
 
 }
 
 /**
- * @augments HttpPushRgb
+ * @augments WLED
  */
-HttpPushRgb.prototype = {
+WLED.prototype = {
 
     // Required Functions
 
@@ -205,73 +151,41 @@ HttpPushRgb.prototype = {
             .setCharacteristic(Characteristic.Model, MODEL)
             .setCharacteristic(Characteristic.FirmwareRevision, FIRMWARE_REVISION);
 
-        switch (this.serviceCategory) {
-            case 'Light':
-                this.log('Creating Lightbulb');
-                this.service = new Service.Lightbulb(this.name);
+        this.log('Creating Lightbulb');
+        this.service = new Service.Lightbulb(this.name);
 
-                if (this.switch.status) {
-                    this.service
-                        .getCharacteristic(Characteristic.On)
-                        .on('get', this.getPowerState.bind(this))
-                        .on('set', this.setPowerState.bind(this));
-                } else {
-                    this.service
-                        .getCharacteristic(Characteristic.On)
-                        .on('set', this.setPowerState.bind(this));
-                }
+        this.service
+            .getCharacteristic(Characteristic.On)
+            .on('get', this.getPowerState.bind(this))
+            .on('set', this.setPowerState.bind(this));
 
-                // Handle brightness
-                if (this.has.brightness) {
-                    this.log('... adding brightness');
-                    this.service
-                        .addCharacteristic(new Characteristic.Brightness())
-                        .on('get', this.getBrightness.bind(this))
-                        .on('set', this.setBrightness.bind(this));
-                }
-                // Handle color
-                if (this.color) {
-                    this.log('... adding color');
-                    this.service
-                        .addCharacteristic(new Characteristic.Hue())
-                        .on('get', this.getHue.bind(this))
-                        .on('set', this.setHue.bind(this));
+        // Handle brightness
+        this.log('... adding brightness');
+        this.service
+            .addCharacteristic(new Characteristic.Brightness())
+            .on('get', this.getBrightness.bind(this))
+            .on('set', this.setBrightness.bind(this));
 
-                    this.service
-                        .addCharacteristic(new Characteristic.Saturation())
-                        .on('get', this.getSaturation.bind(this))
-                        .on('set', this.setSaturation.bind(this));
-                }
+        // Handle color
+        this.log('... adding color');
+        this.service
+            .addCharacteristic(new Characteristic.Hue())
+            .on('get', this.getHue.bind(this))
+            .on('set', this.setHue.bind(this));
 
-                return [informationService, this.service];
+        this.service
+            .addCharacteristic(new Characteristic.Saturation())
+            .on('get', this.getSaturation.bind(this))
+            .on('set', this.setSaturation.bind(this));
 
-            case 'Switch':
-                this.log('creating Switch');
-                this.service = new Service.Switch(this.name);
-
-                if (this.switch.status) {
-                    this.service
-                        .getCharacteristic(Characteristic.On)
-                        .on('get', this.getPowerState.bind(this))
-                        .on('set', this.setPowerState.bind(this));
-                } else {
-                    this.service
-                        .getCharacteristic(Characteristic.On)
-                        .on('set', this.setPowerState.bind(this));
-                }
-                return [informationService, this.service];
-
-            default:
-                return [informationService];
-
+        return [informationService, this.service];
         } // end switch
     },
 
    //** Custom Functions **//
 
    /**
-     * Called by homebridge-http-notification-server
-     * whenever an accessory sends a status update.
+     * Called whenever an accessory sends a status update.
      *
      * @param {function} jsonRequest The characteristic and characteristic value to update.
      */
@@ -301,7 +215,7 @@ HttpPushRgb.prototype = {
      * @param {function} callback The callback that handles the response.
      */
     getPowerState: function(callback) {
-        if (!this.switch.status.url) {
+        if (!this.url) {
             this.log.warn('Ignoring request, switch.status not defined.');
             callback(new Error('No switch.status url defined.'));
             return;
@@ -327,9 +241,9 @@ HttpPushRgb.prototype = {
         var url;
         var body;
 
-        if (!this.switch.powerOn.set_url || !this.switch.powerOff.set_url) {
-            this.log.warn('Ignoring request, powerOn.url or powerOff.url is not defined.');
-            callback(new Error("The 'switch' section in your configuration is incorrect."));
+        if (!this.url) {
+            this.log.warn('Ignoring request, url.');
+            callback(new Error("The 'url' parameter in your configuration is incorrect."));
             return;
         }
 
@@ -363,21 +277,10 @@ HttpPushRgb.prototype = {
      * @param {function} callback The callback that handles the response.
      */
     getBrightness: function(callback) {
-        if (!this.has.brightness) {
-            this.log.warn("Ignoring request; No 'brightness' defined.");
-            callback(new Error("No 'brightness' defined in configuration"));
-            return;
-        }
-
         if (this.brightness) {
             this._httpRequest(this.brightness.status.url, '', 'GET', function(error, response, responseBody) {
                 if (!this._handleHttpErrorResponse('getBrightness()', error, response, responseBody, callback)) {
-                    if (typeof this.brightness.status.bodyRegEx === 'object') {
-                        var level = responseBody.match(this.brightness.status.bodyRegEx)[1];
-                    } else {
-                        var level = parseInt(responseBody);
-                    }
-
+                    var level = responseBody.match(this.brightness.status.bodyRegEx)[1];
                     level = parseInt(100 / this.brightness.max * level);
 
                     this.log('brightness is currently at %s %', level);
@@ -395,29 +298,24 @@ HttpPushRgb.prototype = {
      * @param {function} callback The callback that handles the response.
      */
     setBrightness: function(level, callback) {
-        if (!this.has.brightness) {
-            this.log.warn("Ignoring request; No 'brightness' defined.");
-            callback(new Error("No 'brightness' defined in configuration"));
-            return;
-        }
         this.cache.brightness = level;
 
-        // If achromatic or color.brightness is false, update brightness, otherwise, update HSL as RGB
-        if (!this.color || !this.color.brightness) {
-            var calculatedLevel = Math.ceil(this.brightness.max / 100 * level);
-
-            var url = this.brightness.set_url.url.replace('%s', calculatedLevel);
-            var body = this.brightness.set_url.body.replace('%s', calculatedLevel);
-
-            this._httpRequest(url, body, this.brightness.http_method, function(error, response, responseBody) {
-                if (!this._handleHttpErrorResponse('setBrightness()', error, response, responseBody, callback)) {
-                    this.log('setBrightness() successfully set to %s %', level);
-                    callback();
-                }
-            }.bind(this));
-        } else {
+        // // If achromatic or color.brightness is false, update brightness, otherwise, update HSL as RGB
+        // if (!this.color || !this.color.brightness) {
+        //     var calculatedLevel = Math.ceil(this.brightness.max / 100 * level);
+        //
+        //     var url = this.brightness.set_url.url.replace('%s', calculatedLevel);
+        //     var body = this.brightness.set_url.body.replace('%s', calculatedLevel);
+        //
+        //     this._httpRequest(url, body, this.brightness.http_method, function(error, response, responseBody) {
+        //         if (!this._handleHttpErrorResponse('setBrightness()', error, response, responseBody, callback)) {
+        //             this.log('setBrightness() successfully set to %s %', level);
+        //             callback();
+        //         }
+        //     }.bind(this));
+        // } else {
             this._setRGB(callback);
-        }
+        // }
     },
 
     /**
@@ -435,11 +333,12 @@ HttpPushRgb.prototype = {
 
         this._httpRequest(url, '', 'GET', function(error, response, responseBody) {
             if (!this._handleHttpErrorResponse('getHue()', error, response, responseBody, callback)) {
-                var rgb = responseBody;
+                var rgb = responseBody.match(this.color.get_url.bodyRegEx);
+
                 var levels = this._rgbToHsl(
-                    parseInt(rgb.substr(0,2),16),
-                    parseInt(rgb.substr(2,2),16),
-                    parseInt(rgb.substr(4,2),16)
+                    rgb[1],
+                    rgb[2],
+                    rgb[3]
                 );
 
                 var hue = levels[0];
@@ -487,12 +386,13 @@ HttpPushRgb.prototype = {
 
         this._httpRequest(url, '', 'GET', function(error, response, responseBody) {
             if (!this._handleHttpErrorResponse('getSaturation()', error, response, responseBody, callback)) {
-                var rgb = responseBody;
-                var levels = this._rgbToHsl(
-                    parseInt(rgb.substr(0,2),16),
-                    parseInt(rgb.substr(2,2),16),
-                    parseInt(rgb.substr(4,2),16)
-                );
+              var rgb = responseBody.match(this.color.get_url.bodyRegEx);
+
+              var levels = this._rgbToHsl(
+                  rgb[1],
+                  rgb[2],
+                  rgb[3]
+              );
 
                 var saturation = levels[1];
 
@@ -544,19 +444,20 @@ HttpPushRgb.prototype = {
 
     _buildRgbRequest: function() {
         var rgb = convert.hsv.rgb([this.cache.hue, this.cache.saturation, this.cache.brightness]);
-        var xyz = convert.rgb.xyz(rgb);
-        var hex = convert.rgb.hex(rgb);
-        var xy = {
-            x: (xyz[0] / 100 / (xyz[0] / 100 + xyz[1] / 100 + xyz[2] / 100)).toFixed(4),
-            y: (xyz[1] / 100 / (xyz[0] / 100 + xyz[1] / 100 + xyz[2] / 100)).toFixed(4)
-        };
+        // var xyz = convert.rgb.xyz(rgb);
+        // var hex = convert.rgb.hex(rgb);
+        //
+        // var xy = {
+        //     x: (xyz[0] / 100 / (xyz[0] / 100 + xyz[1] / 100 + xyz[2] / 100)).toFixed(4),
+        //     y: (xyz[1] / 100 / (xyz[0] / 100 + xyz[1] / 100 + xyz[2] / 100)).toFixed(4)
+        // };
 
         var url = this.color.set_url.url;
         var body = this.color.set_url.body;
         var replaces = {
-            '%s': hex,
-            '%xy-x': xy.x,
-            '%xy-y': xy.y
+            '%r': rgb[0],
+            '%g': rgb[1],
+            '%b': rgb[2],
         };
         for (var key in replaces) {
             url = url.replace(key, replaces[key]);
