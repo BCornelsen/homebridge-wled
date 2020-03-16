@@ -485,7 +485,7 @@ WLED.prototype = {
      */
    _httpRequest: function(url, body, method, callback) {
      sem.take(function() {
-       var resp = c.get(url);
+       var resp = this.c.get(url);
        if(!resp) {
          request({
            url: url,
@@ -498,7 +498,7 @@ WLED.prototype = {
              pass: this.password
            }},
            function(error, response, body) {
-             c.put(url, {error: error, response: response, body: body});
+             this.c.put(url, {error: error, response: response, body: body});
              sem.leave();
              callback(error, response, body);
            });
