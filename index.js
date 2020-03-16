@@ -484,8 +484,9 @@ WLED.prototype = {
      */
    _httpRequest: function(url, body, method, callback) {
      this.log('Request (Waiting for semaphore): %s...', url);
+     var log = this.log;
      sem.take(function() {
-       this.log('Request: %s...', url);
+       log('Request: %s...', url);
        var resp = c.get(url);
        if(resp === null) {
          request({
