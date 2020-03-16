@@ -19,12 +19,16 @@ const DEFAULT_BRIGHTNESS_MAX = 255;
 // -----------------------------------------------------------------------------
 var Service, Characteristic;
 var request = require('request');
+var sem = require('semaphore')(1);
+var Cache = require("cache");
 var api;
 var convert = require('color-convert');
 
 // -----------------------------------------------------------------------------
 // Exports
 // -----------------------------------------------------------------------------
+
+
 
 
 //! @module homebridge
@@ -49,6 +53,8 @@ module.exports = function(homebridge){
  * @param {object} config The configuration object.
  */
 function WLED(log, config) {
+
+    this.c = new Cache(500);
 
     this.log = log;
 
@@ -85,6 +91,8 @@ function WLED(log, config) {
        }
     }.bind(this));
 
+    }
+
     // Local caching of HSB color space for RGB callback
     this.cache = {};
     this.cacheUpdated = false;
@@ -96,7 +104,7 @@ function WLED(log, config) {
     this.brightness.set_url.url = this.url + '/win&A=';
     this.brightness.set_url.body = '';
     this.brightness.http_method    = 'GET';
-    this.brightness.max = DEFAULT_BRIGHTNESS_MAX;
+    this.brightness.max = config.brightness.max || DEFAULT_BRIGHTNESS_MAX;
     this.cache.brightness = 0;
 
     // Color handling
@@ -177,6 +185,7 @@ WLED.prototype = {
             .on('set', this.setSaturation.bind(this));
 
         return [informationService, this.service];
+        } // end switch
     },
 
    //** Custom Functions **//
@@ -277,7 +286,6 @@ WLED.prototype = {
         if (this.brightness) {
             this._httpRequest(this.brightness.status.url, '', 'GET', function(error, response, responseBody) {
                 if (!this._handleHttpErrorResponse('getBrightness()', error, response, responseBody, callback)) {
-                    this.log('Response: %s', responseBody);
                     var level = responseBody.match(this.brightness.status.bodyRegEx)[1];
                     level = parseInt(100 / this.brightness.max * level);
 
@@ -462,7 +470,7 @@ WLED.prototype = {
             body = body.replace(key, replaces[key]);
         }
 
-        this.log('_buildRgbRequest converting H:%s S:%s B:%s to RGB: [%s, %s, %s] ...', this.cache.hue, this.cache.saturation, this.cache.brightness, rgb[0], rgb[1], rgb[2]);
+        this.log('_buildRgbRequest converting H:%s S:%s B:%s to RGB:%s ...', this.cache.hue, this.cache.saturation, this.cache.brightness, hex);
 
         return {url: url, body: body};
     },
@@ -478,22 +486,31 @@ WLED.prototype = {
      * @param {method} method Method to use.
      * @param {function} callback The callback that handles the response.
      */
-    _httpRequest: function(url, body, method, callback) {
-        this.log('Request: %s', url);
-        request({
-            url: url,
-            body: body,
-            method: method,
-            timeout: this.timeout,
-            rejectUnauthorized: false,
-            auth: {
-                user: this.username,
-                pass: this.password
-            }},
-            function(error, response, body) {
-               callback(error, response, body);
-        });
-    },
+   _httpRequest: function(url, body, method, callback) {
+     sem.take(function() {
+       var resp = c.get(url);
+       if(!resp) {
+         request({
+           url: url,
+           body: body,
+           method: method,
+           timeout: this.timeout,
+           rejectUnauthorized: false,
+           auth: {
+             user: this.username,
+             pass: this.password
+           }},
+           function(error, response, body) {
+             c.put(url, {error: error, response: response, body: body});
+             sem.leave();
+             callback(error, response, body);
+           });
+         } else {
+           sem.leave();
+           callback(resp.error, resp.response, resp.body);
+         }
+       });
+     },
 
     /**
      * Verify if response code equals '200', otherwise log error and callback
