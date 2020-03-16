@@ -85,8 +85,6 @@ function WLED(log, config) {
        }
     }.bind(this));
 
-    }
-
     // Local caching of HSB color space for RGB callback
     this.cache = {};
     this.cacheUpdated = false;
@@ -98,7 +96,7 @@ function WLED(log, config) {
     this.brightness.set_url.url = this.url + '/win&A=';
     this.brightness.set_url.body = '';
     this.brightness.http_method    = 'GET';
-    this.brightness.max = config.brightness.max || DEFAULT_BRIGHTNESS_MAX;
+    this.brightness.max = DEFAULT_BRIGHTNESS_MAX;
     this.cache.brightness = 0;
 
     // Color handling
@@ -179,7 +177,6 @@ WLED.prototype = {
             .on('set', this.setSaturation.bind(this));
 
         return [informationService, this.service];
-        } // end switch
     },
 
    //** Custom Functions **//
@@ -280,6 +277,7 @@ WLED.prototype = {
         if (this.brightness) {
             this._httpRequest(this.brightness.status.url, '', 'GET', function(error, response, responseBody) {
                 if (!this._handleHttpErrorResponse('getBrightness()', error, response, responseBody, callback)) {
+                    this.log('Response: %s', responseBody);
                     var level = responseBody.match(this.brightness.status.bodyRegEx)[1];
                     level = parseInt(100 / this.brightness.max * level);
 
@@ -464,7 +462,7 @@ WLED.prototype = {
             body = body.replace(key, replaces[key]);
         }
 
-        this.log('_buildRgbRequest converting H:%s S:%s B:%s to RGB:%s ...', this.cache.hue, this.cache.saturation, this.cache.brightness, hex);
+        this.log('_buildRgbRequest converting H:%s S:%s B:%s to RGB: [%s, %s, %s] ...', this.cache.hue, this.cache.saturation, this.cache.brightness, rgb[0], rgb[1], rgb[2]);
 
         return {url: url, body: body};
     },
@@ -481,6 +479,7 @@ WLED.prototype = {
      * @param {function} callback The callback that handles the response.
      */
     _httpRequest: function(url, body, method, callback) {
+        this.log('Request: %s', url);
         request({
             url: url,
             body: body,
