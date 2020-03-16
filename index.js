@@ -483,6 +483,7 @@ WLED.prototype = {
      * @param {function} callback The callback that handles the response.
      */
    _httpRequest: function(url, body, method, callback) {
+     this.log('Request (Waiting for semaphore): %s...', url);
      sem.take(function() {
        this.log('Request: %s...', url);
        var resp = c.get(url);
@@ -503,6 +504,7 @@ WLED.prototype = {
              callback(error, response, body);
            });
          } else {
+
            sem.leave();
            callback(resp.error, resp.response, resp.body);
          }
