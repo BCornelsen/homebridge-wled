@@ -91,8 +91,6 @@ function WLED(log, config) {
        }
     }.bind(this));
 
-    }
-
     // Local caching of HSB color space for RGB callback
     this.cache = {};
     this.cacheUpdated = false;
