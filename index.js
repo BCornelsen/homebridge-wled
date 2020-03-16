@@ -466,7 +466,7 @@ WLED.prototype = {
             body = body.replace(key, replaces[key]);
         }
 
-        this.log('_buildRgbRequest converting H:%s S:%s B:%s to RGB:%s ...', this.cache.hue, this.cache.saturation, this.cache.brightness, hex);
+        this.log('_buildRgbRequest converting H:%s S:%s B:%s to RGB:[%s, %s, %s] ...', this.cache.hue, this.cache.saturation, this.cache.brightness, rgb[0], rgb[1], rgb[2]);
 
         return {url: url, body: body};
     },
