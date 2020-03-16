@@ -29,7 +29,7 @@ var convert = require('color-convert');
 // -----------------------------------------------------------------------------
 
 
-
+var c = new Cache(500);
 
 //! @module homebridge
 //! @param {object} homebridge Export functions required to create a
@@ -54,7 +54,6 @@ module.exports = function(homebridge){
  */
 function WLED(log, config) {
 
-    this.c = new Cache(500);
 
     this.log = log;
 
@@ -485,7 +484,7 @@ WLED.prototype = {
      */
    _httpRequest: function(url, body, method, callback) {
      sem.take(function() {
-       var resp = this.c.get(url);
+       var resp = c.get(url);
        if(!resp) {
          request({
            url: url,
@@ -498,7 +497,7 @@ WLED.prototype = {
              pass: this.password
            }},
            function(error, response, body) {
-             this.c.put(url, {error: error, response: response, body: body});
+             c.put(url, {error: error, response: response, body: body});
              sem.leave();
              callback(error, response, body);
            });
