@@ -183,7 +183,6 @@ WLED.prototype = {
             .on('set', this.setSaturation.bind(this));
 
         return [informationService, this.service];
-        } // end switch
     },
 
    //** Custom Functions **//
