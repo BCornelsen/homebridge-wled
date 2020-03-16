@@ -102,7 +102,7 @@ function WLED(log, config) {
     this.brightness.set_url.url = this.url + '/win&A=';
     this.brightness.set_url.body = '';
     this.brightness.http_method    = 'GET';
-    this.brightness.max = config.brightness.max || DEFAULT_BRIGHTNESS_MAX;
+    this.brightness.max = DEFAULT_BRIGHTNESS_MAX;
     this.cache.brightness = 0;
 
     // Color handling
