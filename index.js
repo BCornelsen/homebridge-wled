@@ -487,7 +487,7 @@ WLED.prototype = {
      sem.take(function() {
        this.log('Request: %s...', url);
        var resp = c.get(url);
-       if(!resp) {
+       if(resp === null) {
          request({
            url: url,
            body: body,
