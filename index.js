@@ -520,7 +520,7 @@ WLED.prototype = {
     _handleHttpErrorResponse: function(functionStr, error, response, responseBody, callback) {
       var errorOccurred = false;
       if (error) {
-          this.log(functionStr +' failed: %s', error.message);
+          this.log(functionStr +' failed (%s): %s',response.statusCode, error.message);
           callback(error);
           errorOccurred = true;
       } else if (response.statusCode != 200) {
