@@ -484,20 +484,20 @@ WLED.prototype = {
      */
    _httpRequest: function(url, body, method, callback) {
      this.log('Request (Waiting for semaphore): %s...', url);
-     var log = this.log;
+     var obj = this;
      sem.take(function() {
-       log('Request: %s...', url);
        var resp = c.get(url);
        if(resp === null) {
+         obj.log('Request: %s...', url);
          request({
            url: url,
            body: body,
            method: method,
-           timeout: this.timeout,
+           timeout: obj.timeout,
            rejectUnauthorized: false,
            auth: {
-             user: this.username,
-             pass: this.password
+             user: obj.username,
+             pass: obj.password
            }},
            function(error, response, body) {
              c.put(url, {error: error, response: response, body: body});
@@ -505,7 +505,7 @@ WLED.prototype = {
              callback(error, response, body);
            });
          } else {
-
+           obj.log('Get from Cache: %s...', url);
            sem.leave();
            callback(resp.error, resp.response, resp.body);
          }
@@ -524,7 +524,7 @@ WLED.prototype = {
     _handleHttpErrorResponse: function(functionStr, error, response, responseBody, callback) {
       var errorOccurred = false;
       if (error) {
-          this.log(functionStr +' failed (%s): %s',response.statusCode, error.message);
+          this.log(functionStr +' failed (%s): %s','', error.message);
           callback(error);
           errorOccurred = true;
       } else if (response.statusCode != 200) {
